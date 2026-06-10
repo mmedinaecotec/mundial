@@ -2336,6 +2336,7 @@ function confirmDeleteUser(userId) {
  document.getElementById('modal-del-confirm').onclick = () => {
  state.users = state.users.filter(x => x.id !== pendingDeleteUserId);
  delete state.pronosticos[pendingDeleteUserId];
+ if (state.pronGuardados) delete state.pronGuardados[pendingDeleteUserId];
  if (state.currentUserId === pendingDeleteUserId) state.currentUserId = null;
  saveState();
  document.getElementById('modal-del-user').classList.remove('visible');
