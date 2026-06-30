@@ -791,6 +791,7 @@ body {
  <button onclick="showSection('fase-octavos')" id="nav-fase-octavos">🔜 Octavos<span class="lock-icon" id="lock-octavos">🔒</span></button>
  <button onclick="showSection('fase-cuartos')" id="nav-fase-cuartos">🔜 Cuartos<span class="lock-icon" id="lock-cuartos">🔒</span></button>
  <button onclick="showSection('fase-semis')" id="nav-fase-semis">🔜 Semis<span class="lock-icon" id="lock-semis">🔒</span></button>
+ <button onclick="showSection('fase-tercerpuesto')" id="nav-fase-tercerpuesto">🥉 3er Puesto<span class="lock-icon" id="lock-tercerpuesto">🔒</span></button>
  <button onclick="showSection('fase-final')" id="nav-fase-final">🥇 Final<span class="lock-icon" id="lock-final">🔒</span></button>
  <button onclick="showSection('ranking')" id="nav-ranking">📊 Ranking</button>
  <button onclick="requestAdmin()" id="nav-admin" style="border-color:rgba(220,80,80,0.5);color:rgba(255,120,120,0.9)">🔐 Admin</button>
@@ -806,9 +807,19 @@ body {
 <script>
 const ADMIN_PASS = 'Mundial2026#Admin';
 const STORAGE_KEY = 'mundial2026_v4';
-const FASES = ['grupos','dieciseisavos','octavos','cuartos','semis','final'];
-const FASE_LABELS = { grupos:'Fase de Grupos', dieciseisavos:'Dieciseisavos de Final', octavos:'Octavos de Final', cuartos:'Cuartos de Final', semis:'Semifinales', final:'Gran Final' };
-const FASE_COLORES = { grupos:'rojo', dieciseisavos:'naranja', octavos:'morado', cuartos:'azul', semis:'verde', final:'amarillo' };
+const FASES = ['grupos','dieciseisavos','octavos','cuartos','semis','tercerpuesto','final'];
+const FASE_LABELS = { grupos:'Fase de Grupos', dieciseisavos:'Dieciseisavos de Final', octavos:'Octavos de Final', cuartos:'Cuartos de Final', semis:'Semifinales', tercerpuesto:'Tercer y Cuarto Puesto', final:'Gran Final' };
+const FASE_COLORES = { grupos:'rojo', dieciseisavos:'naranja', octavos:'morado', cuartos:'azul', semis:'verde', tercerpuesto:'lila', final:'amarillo' };
+
+// Fases desde las que el acierto vale DOBLE punto (octavos en adelante).
+// 'dieciseisavos' y 'grupos' valen 1 punto normal.
+const FASES_DOBLE_PUNTO = ['octavos','cuartos','semis','tercerpuesto','final'];
+
+// Fases en las que NO se permite pronosticar/registrar "empata" — solo
+// gana/pierde, porque desde octavos en adelante siempre hay un equipo
+// que avanza (o un ganador del tercer puesto) y no se valora el empate
+// a 90'. Dieciseisavos sigue permitiendo empate.
+const FASES_SIN_EMPATE = ['octavos','cuartos','semis','tercerpuesto','final'];
 
 // Hora de inicio de cada partido (hora Ecuador UTC-5 / hora local del partido)
 // Se bloquea el pronóstico cuando llega esta hora aunque no se haya guardado
@@ -973,6 +984,13 @@ const BRACKET_FIN = [
  { id:'f01', num:104, refL:'s01', refV:'s02', fecha:'19 Jul' },
 ];
 
+// Tercer y cuarto puesto: enfrenta a los PERDEDORES de cada semifinal.
+// Se usa el prefijo 'loser:' para indicar a resolveSlot que debe buscar
+// al equipo que NO avanzó en ese cruce, en vez de al ganador.
+const BRACKET_TER = [
+ { id:'t01', num:103, refL:'loser:s01', refV:'loser:s02', fecha:'18 Jul' },
+];
+
 // Mapeo de grupos para calcular clasificados
 const GRUPOS_DEF = ['A','B','C','D','E','F','G','H','I','J','K','L'];
 
@@ -1097,6 +1115,7 @@ function initFirebase() {
     if (data) {
      const prevAdmin = state.adminUnlocked;
      state = { ...defaultState(), ...data };
+     state.fases = { ...defaultState().fases, ...(data.fases || {}) };
      state.adminUnlocked = prevAdmin;
      state.currentUserId = null;
      state.currentSection = 'registro';
@@ -1115,6 +1134,7 @@ function initFirebase() {
       const prevAdminTab = window._adminTab;
       const prevPendingUserId = state._pendingUserId;
       state = { ...defaultState(), ...d };
+      state.fases = { ...defaultState().fases, ...(d.fases || {}) };
       state.adminUnlocked = prevAdmin;
       state.currentUserId = prevUser;
       state.currentSection = prevSection;
@@ -1139,7 +1159,7 @@ function defaultState() {
   users: [],
   pendientes: [],
   rechazados: [],
-  fases: { grupos:'open', dieciseisavos:'pending', octavos:'pending', cuartos:'pending', semis:'pending', final:'pending' },
+  fases: { grupos:'open', dieciseisavos:'pending', octavos:'pending', cuartos:'pending', semis:'pending', tercerpuesto:'pending', final:'pending' },
   pronosticos: {},
   resultados: {},
   marcadores: {},
@@ -1207,7 +1227,7 @@ function showSection(id) {
 }
 
 function updateLockIcons() {
- ['dieciseisavos','octavos','cuartos','semis','final'].forEach(f => {
+ ['dieciseisavos','octavos','cuartos','semis','tercerpuesto','final'].forEach(f => {
  const el = document.getElementById('lock-' + f);
  if (!el) return;
  if (state.fases[f] === 'open') el.textContent = ' ✅';
@@ -1432,9 +1452,14 @@ function calcClasificados() {
  return clas;
 }
 
-// Resuelve un slot (ej: '2A', '1E', '3ABCDF') a la clave de equipo
+// Resuelve un slot (ej: '2A', '1E', '3ABCDF', 'loser:s01') a la clave de equipo
 function resolveSlot(slot, clas) {
  if (!slot) return null;
+ // Perdedor de un cruce de eliminatoria (usado para el tercer puesto)
+ if (slot.startsWith('loser:')) {
+ const refId = slot.slice(6);
+ return (state.perdedores && state.perdedores[refId]) || null;
+ }
  // Ganador de un partido knockout
  if (state.ganadores[slot]) return state.ganadores[slot];
  // Slot de clasificado de grupo
@@ -1462,6 +1487,11 @@ function slotLabel(slot) {
  '1I':'1° Grupo I','1J':'1° Grupo J','1K':'1° Grupo K','1L':'1° Grupo L',
  };
  if (labels[slot]) return labels[slot];
+ if (slot.startsWith('loser:')) {
+ const refId = slot.slice(6);
+ const m = BRACKET_SEM.find(x=>x.id===refId);
+ return `Perdedor P${m?.num||'?'}`;
+ }
  if (slot.startsWith('3')) return `Mejor 3° (${slot.slice(1)})`;
  if (slot.startsWith('d')) return `Gan. P${BRACKET_D16.find(x=>x.id===slot)?.num||'?'}`;
  if (slot.startsWith('o')) return `Gan. P${BRACKET_OCT.find(x=>x.id===slot)?.num||'?'}`;
@@ -1504,7 +1534,7 @@ function openBracketSlotEditor(matchId, slotKey) {
  const sideLabel = side === 'L' ? 'equipo local (izquierda)' : 'equipo visitante (derecha)';
 
  // Find the match
- const allBrackets = [...BRACKET_D16, ...BRACKET_OCT, ...BRACKET_CUA, ...BRACKET_SEM, ...BRACKET_FIN];
+ const allBrackets = [...BRACKET_D16, ...BRACKET_OCT, ...BRACKET_CUA, ...BRACKET_SEM, ...BRACKET_TER, ...BRACKET_FIN];
  const match = allBrackets.find(p => p.id === matchId);
 
  document.getElementById('modal-bracket-desc').textContent =
@@ -1683,7 +1713,7 @@ function renderFaseKnockout(fase) {
  return;
  }
 
- const bracketMap = { dieciseisavos: BRACKET_D16, octavos: BRACKET_OCT, cuartos: BRACKET_CUA, semis: BRACKET_SEM, final: BRACKET_FIN };
+ const bracketMap = { dieciseisavos: BRACKET_D16, octavos: BRACKET_OCT, cuartos: BRACKET_CUA, semis: BRACKET_SEM, tercerpuesto: BRACKET_TER, final: BRACKET_FIN };
  const bracket = bracketMap[fase];
  const userId = state.currentUserId;
  const prono = state.pronosticos[userId] || {};
@@ -1792,18 +1822,22 @@ function buildMatchCard(p, prono, isLocked, fase) {
    <div style="font-size:10px;color:var(--texto-sutil);font-weight:700;margin-top:5px;text-align:center">${lockMsg}</div>`;
   }
  } else {
+  const sinEmpate = FASES_SIN_EMPATE.includes(fase);
   const g  = val==='gana'   ? 'sel-gana'   : '';
   const e  = val==='empata' ? 'sel-empata' : '';
   const pi = val==='pierde' ? 'sel-pierde' : '';
+  const empataBtn = sinEmpate ? '' : `<button class="result-btn ${e}"  onclick="setPron('${userId}','${fase}','${p.id}','empata',this)">🤝 Empata</button>`;
+  const nombresCols = sinEmpate ? '1fr 1fr' : '1fr 1fr 1fr';
+  const nombresMid = sinEmpate ? '' : '<div style="font-size:9px;color:var(--texto-sutil);text-align:center;font-weight:600">—</div>';
   selectorHtml = `
    <div class="result-selector">
     <button class="result-btn ${g}"  onclick="setPron('${userId}','${fase}','${p.id}','gana',this)">${lFlag} Gana</button>
-    <button class="result-btn ${e}"  onclick="setPron('${userId}','${fase}','${p.id}','empata',this)">🤝 Empata</button>
+    ${empataBtn}
     <button class="result-btn ${pi}" onclick="setPron('${userId}','${fase}','${p.id}','pierde',this)">${vFlag} Gana</button>
    </div>
-   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-top:3px">
+   <div style="display:grid;grid-template-columns:${nombresCols};gap:5px;margin-top:3px">
     <div style="font-size:9px;color:var(--texto-sutil);text-align:center;font-weight:600;line-height:1.2">${lName}</div>
-    <div style="font-size:9px;color:var(--texto-sutil);text-align:center;font-weight:600">—</div>
+    ${nombresMid}
     <div style="font-size:9px;color:var(--texto-sutil);text-align:center;font-weight:600;line-height:1.2">${vName}</div>
    </div>`;
  }
@@ -1891,7 +1925,7 @@ async function doGuardarPron() { document.getElementById('modal-guardar').classL
 // Helper: returns the list of match objects for any phase
 function getFasePartidos(fase) {
  if (fase === 'grupos') return PARTIDOS.grupos;
- const m = { dieciseisavos: BRACKET_D16, octavos: BRACKET_OCT, cuartos: BRACKET_CUA, semis: BRACKET_SEM, final: BRACKET_FIN };
+ const m = { dieciseisavos: BRACKET_D16, octavos: BRACKET_OCT, cuartos: BRACKET_CUA, semis: BRACKET_SEM, tercerpuesto: BRACKET_TER, final: BRACKET_FIN };
  return m[fase] || [];
 }
 
@@ -1913,10 +1947,11 @@ function renderRanking() {
  scores[u.id] = { total:0, detalle:{} };
  FASES.forEach(fase => {
  let pts = 0;
+ const multiplicador = FASES_DOBLE_PUNTO.includes(fase) ? 2 : 1;
  getFasePartidos(fase).forEach(p => {
  const prono = (state.pronosticos[u.id]||{})[p.id];
  const real = state.resultados[p.id];
- if (prono && real && prono === real) pts++;
+ if (prono && real && prono === real) pts += multiplicador;
  });
  scores[u.id].detalle[fase] = pts;
  scores[u.id].total += pts;
@@ -1955,6 +1990,7 @@ function renderRanking() {
  <td class="pts-fase">${s.detalle.octavos}</td>
  <td class="pts-fase">${s.detalle.cuartos}</td>
  <td class="pts-fase">${s.detalle.semis}</td>
+ <td class="pts-fase">${s.detalle.tercerpuesto}</td>
  <td class="pts-fase">${s.detalle.final}</td>
  </tr>`;
  }).join('');
@@ -1962,7 +1998,7 @@ function renderRanking() {
  c.innerHTML = `
  <div class="card azul">
  <div class="card-title">📊 Ranking General</div>
- <div class="alert alert-info" style="margin-bottom:1rem">Resultados cargados: <strong>${totalRes} / ${totalPar}</strong> partidos · <strong>1 punto</strong> por pronóstico exacto</div>
+ <div class="alert alert-info" style="margin-bottom:1rem">Resultados cargados: <strong>${totalRes} / ${totalPar}</strong> partidos · <strong>1 punto</strong> por acierto (grupos y 16avos) · <strong>2 puntos</strong> por acierto desde octavos en adelante</div>
  ${podioHtml}
  <div style="overflow-x:auto">
  <table class="ranking-table">
@@ -1975,6 +2011,7 @@ function renderRanking() {
  <th style="text-align:center">Octavos</th>
  <th style="text-align:center">Cuartos</th>
  <th style="text-align:center">Semis</th>
+ <th style="text-align:center">3er Puesto</th>
  <th style="text-align:center">Final</th>
  </tr></thead>
  <tbody>${rowsHtml}</tbody>
@@ -2014,6 +2051,8 @@ function setGanadorKO(matchId, equipoKey, localKey, visitaKey) {
  if (state.ganadores[matchId] === equipoKey) {
   delete state.ganadores[matchId];
   delete state.resultados[matchId];
+  if (!state.perdedores) state.perdedores = {};
+  delete state.perdedores[matchId];
   saveState();
   renderAdmin();
   toast('↩ Ganador deseleccionado');
@@ -2021,8 +2060,17 @@ function setGanadorKO(matchId, equipoKey, localKey, visitaKey) {
  }
  // Registrar ganador (para bracket siguiente)
  state.ganadores[matchId] = equipoKey;
- // Registrar resultado (para ranking de pronósticos)
- state.resultados[matchId] = (equipoKey === localKey) ? 'gana' : 'pierde';
+ // Registrar perdedor (necesario para resolver el partido por el 3er puesto)
+ if (!state.perdedores) state.perdedores = {};
+ state.perdedores[matchId] = (equipoKey === localKey) ? visitaKey : localKey;
+ // Registrar resultado para ranking de pronósticos.
+ // Si ya se había marcado "empata" para este partido (porque se definió
+ // por penales tras empatar en los 90'), se respeta ese resultado para
+ // que los pronósticos de empate sigan sumando punto. Si no, se deriva
+ // normalmente de quién avanzó (gana/pierde).
+ if (state.resultados[matchId] !== 'empata') {
+  state.resultados[matchId] = (equipoKey === localKey) ? 'gana' : 'pierde';
+ }
  saveState();
  renderAdmin();
  const { flag, name } = parseEquipo(equipoKey);
@@ -2032,9 +2080,24 @@ function setGanadorKO(matchId, equipoKey, localKey, visitaKey) {
 function clearGanadorKO(matchId) {
  delete state.ganadores[matchId];
  delete state.resultados[matchId];
+ if (state.perdedores) delete state.perdedores[matchId];
  saveState();
  renderAdmin();
  toast('↩ Ganador removido');
+}
+
+function toggleEmpate90KO(matchId, localKey, visitaKey) {
+ if (!state.ganadores[matchId]) return; // necesita ganador ya definido
+ if (state.resultados[matchId] === 'empata') {
+  // Desmarcar: volver al resultado normal según quién avanza
+  state.resultados[matchId] = (state.ganadores[matchId] === localKey) ? 'gana' : 'pierde';
+ } else {
+  // Marcar como empate a 90' — quien pronosticó "empata" suma punto,
+  // sin afectar quién avanza al siguiente cruce (state.ganadores intacto)
+  state.resultados[matchId] = 'empata';
+ }
+ saveState();
+ renderAdmin();
 }
 
 function renderGanadoresKnockout() {
@@ -2043,6 +2106,7 @@ function renderGanadoresKnockout() {
   { fase: 'octavos', label: 'Octavos de Final', bracket: BRACKET_OCT, emoji: '⚔️' },
   { fase: 'cuartos', label: 'Cuartos de Final', bracket: BRACKET_CUA, emoji: '🏅' },
   { fase: 'semis', label: 'Semifinales', bracket: BRACKET_SEM, emoji: '🔥' },
+  { fase: 'tercerpuesto', label: 'Tercer y Cuarto Puesto', bracket: BRACKET_TER, emoji: '🥉' },
   { fase: 'final', label: 'Gran Final', bracket: BRACKET_FIN, emoji: '🏆' },
  ];
 
@@ -2072,6 +2136,7 @@ function renderGanadoresKnockout() {
 
    const lSel = ganador === lResolved;
    const vSel = ganador === vResolved;
+   const eSel = state.resultados[p.id] === 'empata';
 
    return `<div style="border:2px solid ${ganador ? 'var(--verde)' : 'var(--borde)'};border-radius:10px;padding:14px;background:${ganador ? '#f6fef8' : 'white'};transition:all 0.2s">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -2093,6 +2158,10 @@ function renderGanadoresKnockout() {
       ${vSel ? '<div style="font-size:10px;color:var(--verde);font-weight:900;margin-top:4px">✅ AVANZA</div>' : '<div style="font-size:10px;color:var(--texto-sutil);margin-top:4px">Toca para elegir</div>'}
      </button>
     </div>
+    ${(ganador && !FASES_SIN_EMPATE.includes(fase)) ? `<button onclick="toggleEmpate90KO('${p.id}','${lEscaped}','${vEscaped}')"
+      style="width:100%;border:2px solid ${eSel ? 'var(--amarillo)' : 'var(--borde)'};border-radius:8px;padding:7px;background:${eSel ? '#fffde7' : 'white'};cursor:pointer;font-size:11px;font-weight:700;color:${eSel ? '#7a6000' : 'var(--texto-sutil)'};margin-bottom:8px">
+      🤝 ${eSel ? 'Empató a 90\' (ganó por penales) — toca para quitar' : '¿Empataron en los 90\'? Marcar aquí'}
+     </button>` : ''}
     ${!ganador ? '' : `<div style="text-align:center;font-size:12px;font-weight:700;color:var(--verde);padding:6px;background:#e6f9ec;border-radius:6px">
      ${parseEquipo(ganador).flag} ${parseEquipo(ganador).name} avanza al siguiente cruce
     </div>`}
@@ -2164,6 +2233,7 @@ function renderAdmin() {
  { label:'Octavos de Final', bracket: BRACKET_OCT },
  { label:'Cuartos de Final', bracket: BRACKET_CUA },
  { label:'Semifinales', bracket: BRACKET_SEM },
+ { label:'Tercer y Cuarto Puesto', bracket: BRACKET_TER },
  { label:'Gran Final', bracket: BRACKET_FIN },
  ];
 
@@ -2308,7 +2378,7 @@ function renderAdmin() {
    </div>`;
   })() : '';
 
-  const hayKO = ['dieciseisavos','octavos','cuartos','semis','final'].some(f => state.fases[f] !== 'pending');
+  const hayKO = ['dieciseisavos','octavos','cuartos','semis','tercerpuesto','final'].some(f => state.fases[f] !== 'pending');
   const koSection = hayKO ? `<div>
    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #f0f0f0">
     <div style="font-size:13px;font-weight:700;color:var(--negro)">🏆 Fases Eliminatorias</div>
@@ -2481,13 +2551,14 @@ function openEditUser(userId) {
  const e = val==='empata'?'sel-empata':'';
  const pi = val==='pierde'?'sel-pierde':'';
  const n = val==='none'?'sel-none':'';
+ const empataBtn = FASES_SIN_EMPATE.includes(fase) ? '' : `<button class="edit-btn ${e}" onclick="setEditPron('${p.id}','empata',this)">🤝 Empata</button>`;
  return `<div class="edit-match-row">
  <div style="flex:1;min-width:160px">
  <div class="edit-match-name">${lFlag} ${lName} vs ${vFlag} ${vName}</div>
  <div class="edit-match-date">${p.fecha||''} </div>
  <div class="edit-btns">
  <button class="edit-btn ${g}" onclick="setEditPron('${p.id}','gana',this)">${lFlag} Gana</button>
- <button class="edit-btn ${e}" onclick="setEditPron('${p.id}','empata',this)">🤝 Empata</button>
+ ${empataBtn}
  <button class="edit-btn ${pi}" onclick="setEditPron('${p.id}','pierde',this)">${vFlag} Gana</button>
  <button class="edit-btn ${n}" onclick="setEditPron('${p.id}','none',this)" title="Sin pronóstico">✖</button>
  </div>
