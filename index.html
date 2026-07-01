@@ -916,15 +916,15 @@ const MATCH_KICKOFF = {
   'd06': '2026-06-30T13:00', // M78 Costa de Marfil vs Noruega
   'd07': '2026-06-30T17:00', // M77 Francia vs Suecia
   'd07b': '2026-06-30T22:00',// M79 México vs Ecuador (id real: d07 según bracket)
-  'd08': '2026-07-01T12:00', // M80
-  'd09': '2026-07-01T16:00', // M81
-  'd10': '2026-07-01T20:00', // M82
-  'd12': '2026-07-02T15:00', // M84
-  'd11': '2026-07-02T19:00', // M83
-  'd13': '2026-07-03T14:00', // M85
-  'd14': '2026-07-03T18:00', // M86
-  'd15': '2026-07-03T14:00', // M87
-  'd16': '2026-07-03T17:30', // M88
+  'd08': '2026-07-01T11:00', // M80 Inglaterra vs RD Congo
+  'd09': '2026-07-01T15:00', // M81 Bélgica vs Senegal
+  'd10': '2026-07-01T19:00', // M82 USA vs Bosnia
+  'd12': '2026-07-02T14:00', // M84 España vs Austria
+  'd11': '2026-07-02T18:00', // M83 Portugal vs Croacia
+  'd13': '2026-07-02T22:00', // M85 Suiza vs Argelia
+  'd14': '2026-07-03T13:00', // M86 Australia vs Egipto
+  'd15': '2026-07-03T17:00', // M87 Argentina vs Cabo Verde
+  'd16': '2026-07-03T20:30', // M88 Colombia vs Ghana
   // ── Octavos (Round of 16) ──
   'o02': '2026-07-04T13:00', // M90 Canadá vs Marruecos
   'o01': '2026-07-04T17:00', // M89 Paraguay vs Francia
@@ -1762,6 +1762,11 @@ function renderFaseKnockout(fase) {
 
  const cardsHtml = bracket.map(p => {
  const { lStr, vStr, lResolved, vResolved } = resolveMatch(p, bracket);
+ // Hora del partido desde MATCH_KICKOFF
+ const kickoffRaw = MATCH_KICKOFF[p.id];
+ const horaDisplay = kickoffRaw
+  ? `<span style="margin-left:6px;background:var(--verde);color:white;padding:1px 7px;border-radius:3px;font-weight:800;font-size:11px">⏰ ${kickoffRaw.split('T')[1]}</span>`
+  : '';
  // Build a virtual partido object for buildMatchCard
  const virtual = {
  id: p.id,
@@ -1774,8 +1779,8 @@ function renderFaseKnockout(fase) {
  if (!bothResolved) {
  // Show as pending matchup
  return `<div class="match-card" style="opacity:0.6">
- <div class="match-date-bar">
- <span class="match-date">${p.fecha}</span>
+ <div class="match-date-bar" style="display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap">
+ <span class="match-date">${p.fecha}</span>${horaDisplay}
  </div>
  <div class="match-teams">
  <div class="team-block"><span class="team-flag">⏳</span><div class="team-name" style="font-size:10px">${lStr}</div></div>
