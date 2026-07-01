@@ -908,12 +908,50 @@ const MATCH_KICKOFF = {
   'g70': '2026-06-23T18:00', // Panamá vs Croacia
   'g71': '2026-06-27T16:00', // Panamá vs Inglaterra
   'g72': '2026-06-27T16:00', // Croacia vs Ghana
+  // ── Dieciseisavos (Round of 32) ── hora Ecuador = ET (UTC-5)
+  'd01': '2026-06-28T15:00', // M73 Sudáfrica vs Canadá
+  'd04': '2026-06-29T13:00', // M76 Brasil vs Japón
+  'd02': '2026-06-29T16:30', // M74 Alemania vs Paraguay
+  'd03': '2026-06-29T21:00', // M75 Países Bajos vs Marruecos
+  'd06': '2026-06-30T13:00', // M78 Costa de Marfil vs Noruega
+  'd07': '2026-06-30T17:00', // M77 Francia vs Suecia
+  'd07b': '2026-06-30T22:00',// M79 México vs Ecuador (id real: d07 según bracket)
+  'd08': '2026-07-01T12:00', // M80
+  'd09': '2026-07-01T16:00', // M81
+  'd10': '2026-07-01T20:00', // M82
+  'd12': '2026-07-02T15:00', // M84
+  'd11': '2026-07-02T19:00', // M83
+  'd13': '2026-07-03T14:00', // M85
+  'd14': '2026-07-03T18:00', // M86
+  'd15': '2026-07-03T14:00', // M87
+  'd16': '2026-07-03T17:30', // M88
+  // ── Octavos (Round of 16) ──
+  'o02': '2026-07-04T13:00', // M90 Canadá vs Marruecos
+  'o01': '2026-07-04T17:00', // M89 Paraguay vs Francia
+  'o03': '2026-07-05T16:00', // M91 Brasil vs Noruega
+  'o04': '2026-07-05T20:00', // M92 México vs ...
+  'o05': '2026-07-06T15:00', // M93
+  'o06': '2026-07-06T20:00', // M94
+  'o07': '2026-07-07T12:00', // M95 Argentina vs ...
+  'o08': '2026-07-07T16:00', // M96
+  // ── Cuartos ──
+  'c01': '2026-07-09T16:00', // M97
+  'c02': '2026-07-09T20:00', // M98
+  'c03': '2026-07-10T17:00', // M99
+  'c04': '2026-07-10T21:00', // M100
+  // ── Semifinales ──
+  's01': '2026-07-14T15:00', // M101
+  's02': '2026-07-15T15:00', // M102
+  // ── Tercer puesto ──
+  't01': '2026-07-18T17:00', // M103
+  // ── Final ──
+  'f01': '2026-07-19T15:00', // M104
 };
 
-// Zona horaria Ecuador (UTC-5). Las horas en MATCH_KICKOFF son hora local Ecuador.
+// Zona horaria Ecuador (UTC-5). Las horas en MATCH_KICKOFF son hora local Ecuador (= ET).
 function isMatchStarted(matchId) {
   const kickoff = MATCH_KICKOFF[matchId];
-  if (!kickoff) return false; // fases eliminatorias: solo bloqueo por guardado manual
+  if (!kickoff) return false;
   // Parsear como hora local Ecuador (UTC-5)
   const [datePart, timePart] = kickoff.split('T');
   const [y, m, d] = datePart.split('-').map(Number);
@@ -1804,7 +1842,7 @@ function buildMatchCard(p, prono, isLocked, fase) {
  // Mensaje de por qué está bloqueado
  let lockMsg = '';
  if (guardado) lockMsg = '🔒 Guardado';
- else if (started) lockMsg = '⏱️ Partido en curso o finalizado';
+ else if (started) lockMsg = '⏱️ Partido iniciado — pronóstico cerrado';
  else if (isLocked) lockMsg = '🔒 Fase cerrada por la administradora';
 
  let selectorHtml;
@@ -1867,7 +1905,7 @@ function buildMatchCard(p, prono, isLocked, fase) {
 async function setPron(userId, fase, matchId, val, btn) {
  if (state.fases[fase] === 'locked') return;
  if (isMatchGuardado(userId, matchId)) return;
- if (isMatchStarted(matchId)) { toast('⏱️ El partido ya comenzó, no puedes modificar'); return; }
+ if (isMatchStarted(matchId)) { toast('⏱️ El partido ya inició, no puedes modificar el pronóstico'); return; }
 
  // Deshabilitar todos los botones de la tarjeta de inmediato para evitar doble clic
  const card = document.getElementById('mc-' + matchId);
