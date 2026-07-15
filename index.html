@@ -805,9 +805,8 @@ body {
 <div class="main" id="main-content"></div>
 
 <script>
-// Contraseña de admin verificada como hash SHA-256 contra Firebase.
-// Para cambiarla: Firebase Console → Datos → config → adminHash
-// Hash actual corresponde a: Canada2026#Admin (no visible en código fuente)
+// Contraseña de admin almacenada como hash SHA-256 (no visible en texto plano)
+const ADMIN_PASS_HASH = '13f2080dde1513df0b98a3784e5d38b4ff9a3d42f5816219bc72f8f2433c5ed9';
 async function checkAdminPass(input) {
  try {
   const encoder = new TextEncoder();
@@ -815,12 +814,8 @@ async function checkAdminPass(input) {
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const inputHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  const snap = await fbRef.child('config/adminHash').once('value');
-  const storedHash = snap.val();
-  if (!storedHash) return false;
-  return inputHash === storedHash;
+  return inputHash === ADMIN_PASS_HASH;
  } catch(e) {
-  console.error('Error verificando contraseña:', e);
   return false;
  }
 }
